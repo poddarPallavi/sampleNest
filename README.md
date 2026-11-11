@@ -78,7 +78,7 @@ src/
     └── webhooks.controller.ts     POST /webhooks/razorpay
 ```
 
-## Key ideas (the things to explain in an interview)
+## Key ideas
 
 1. **Signature verification.** Razorpay signs each webhook with
    HMAC-SHA256(raw body, webhook secret). We recompute it and compare in
