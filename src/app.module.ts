@@ -1,22 +1,46 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { TasksModule } from './tasks/tasks.module.js';
+import { OrdersModule } from './orders/orders.module.js';
+import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { LoggerMiddleware } from './common/logger.middleware.js';
+import { ApiKeyGuard } from './common/api-key.guard.js';
 
-// The root module. Every Nest app has exactly one of these, passed to
-// NestFactory.create() in main.ts. It wires together:
-// - ConfigModule: loads variables from .env, makes ConfigService injectable everywhere
-// - TasksModule: the feature module we built (see src/tasks/)
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), TasksModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: (config) => {
+        for (const key of [
+          'API_KEY',
+          'MONGODB_URI',
+          'RAZORPAY_KEY_ID',
+          'RAZORPAY_KEY_SECRET',
+          'RAZORPAY_WEBHOOK_SECRET',
+        ]) {
+          if (!config[key]) {
+            throw new Error(`${key} must be set (e.g. in .env)`);
+          }
+        }
+        return config;
+      },
+    }),
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.getOrThrow<string>('MONGODB_URI'),
+      }),
+    }),
+    OrdersModule,
+    WebhooksModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ApiKeyGuard }],
 })
 export class AppModule implements NestModule {
-  // Middleware is wired up here rather than with a decorator, because it
-  // needs to run before Nest's routing decides which controller to use.
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
   }
